@@ -8,7 +8,11 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://ssy-happytails.vercel.app"],
+    origin: [
+      "http://localhost:3000",
+      "https://ssy-happytails.vercel.app",
+      "https://www.ssy-happytails.vercel.app",
+    ],
     credentials: true,
   }),
 );
