@@ -31,6 +31,8 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 const db = client.db("happyTails");
 const petsCollection = db.collection("pets");
+const requestsCollection = db.collection("requests");
+const usersCollection = db.collection("user");
 
 const JWKS = createRemoteJWKSet(
   new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
@@ -49,7 +51,6 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const { payload } = await jwtVerify(token, JWKS);
-    console.log(payload);
     next();
   } catch (error) {
     return res.status(403).json({ message: "Forbidden" });
@@ -60,6 +61,7 @@ async function run() {
   try {
     // await client.connect();
 
+    // Pets
     app.get("/pets", async (req, res) => {
       const { name, species, ownerEmail, limit } = req.query;
       const query = {};
@@ -78,7 +80,35 @@ async function run() {
     app.get("/pets/:id", async (req, res) => {
       const { id } = req.params;
       const pet = await petsCollection.findOne({ _id: new ObjectId(id) });
-      res.json(pet);
+      const owner = await usersCollection.findOne(
+        { email: pet?.ownerEmail },
+        { projection: { name: 1 } },
+      );
+      res.json({ ...pet, ownerName: owner.name });
+    });
+
+    app.post("/pet", verifyToken, async (req, res) => {
+      const petData = req.body;
+
+      if (!petData) return res.json({ ok: false, message: "Invalid payload" });
+
+      const result = await petsCollection.insertOne({
+        ...petData,
+        adopted: false,
+      });
+
+      if (result.insertedId) {
+        return res.send({
+          ok: true,
+          message: "Pet post for adoption published successfully",
+          id: result?.insertedId,
+        });
+      } else {
+        return res.send({
+          ok: false,
+          message: "Failed to add adoption post",
+        });
+      }
     });
 
     app.patch("/pet/:id", verifyToken, async (req, res) => {
@@ -101,6 +131,44 @@ async function run() {
       const result = await petsCollection.deleteOne({ _id: new ObjectId(id) });
 
       return res.json(result);
+    });
+
+    // Requests
+    app.post("/requests", verifyToken, async (req, res) => {
+      const { name, email, petId, pickupDate, message } = req.body;
+
+      const targetPet = await petsCollection.findOne({
+        _id: new ObjectId(petId),
+      });
+
+      if (!targetPet)
+        return res.status(404).json({ ok: false, message: "Pet not found." });
+
+      if (targetPet.ownerEmail === email)
+        return res
+          .status(403)
+          .json({ ok: false, message: "You cannot adopt your own pet." });
+
+      const result = await requestsCollection.insertOne({
+        petId,
+        name,
+        email,
+        pickupDate,
+        message,
+        status: "pending",
+      });
+
+      if (result.insertedId) {
+        return res.send({
+          ok: true,
+          message: "Adoption request added successfully",
+        });
+      } else {
+        return res.send({
+          ok: false,
+          message: "Failed to add adoption request",
+        });
+      }
     });
 
     // await client.db("admin").command({ ping: 1 });
