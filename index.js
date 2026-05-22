@@ -214,13 +214,14 @@ async function run() {
 
     app.get("/requests", verifyToken, async (req, res) => {
       const email = req.email;
+      const { petId } = req.query;
+
+      const matchStage = petId ? { petId: new ObjectId(petId) } : { email };
 
       const result = await requestsCollection
         .aggregate([
           {
-            $match: {
-              email,
-            },
+            $match: matchStage,
           },
           {
             $lookup: {
