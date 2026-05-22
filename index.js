@@ -75,7 +75,8 @@ async function run() {
         .find(query)
         .limit(limit ? parseInt(limit) : 0)
         .toArray();
-      res.json(pets);
+
+      return res.json(pets);
     });
 
     app.get("/pets/:id", async (req, res) => {
@@ -123,15 +124,43 @@ async function run() {
         },
       );
 
-      return res.json(result);
+      if (result.modifiedCount > 0) {
+        return res.json({
+          ok: true,
+          message: "Pet data was updated successfully.",
+        });
+      } else {
+        return res.json({
+          ok: false,
+          message: "Failed to update the pet's data.",
+        });
+      }
     });
 
     app.delete("/pet/:id", verifyToken, async (req, res) => {
+      const { email } = req;
       const { id } = req.params;
 
-      const result = await petsCollection.deleteOne({ _id: new ObjectId(id) });
+      const result = await petsCollection.deleteOne({
+        _id: new ObjectId(id),
+        ownerEmail: email,
+      });
 
-      return res.json(result);
+      const deleteRequests = await requestsCollection.deleteMany({
+        petId: new ObjectId(id),
+      });
+
+      if (result.deletedCount > 0) {
+        return res.json({
+          ok: true,
+          message: "Adoption post was deleted successfully.",
+        });
+      } else {
+        return res.json({
+          ok: false,
+          message: "Failed to delete the adoption post.",
+        });
+      }
     });
 
     // Requests
@@ -212,9 +241,9 @@ async function run() {
       return res.json(result);
     });
 
-    app.delete("/requests", verifyToken, async (req, res) => {
+    app.delete("/requests/:id", verifyToken, async (req, res) => {
       const { email } = req;
-      const { id } = req.body;
+      const { id } = req.params;
 
       const result = await requestsCollection.deleteOne({
         _id: new ObjectId(id),
