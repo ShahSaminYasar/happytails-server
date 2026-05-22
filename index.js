@@ -51,6 +51,7 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const { payload } = await jwtVerify(token, JWKS);
+    req.email = payload.email;
     next();
   } catch (error) {
     return res.status(403).json({ message: "Forbidden" });
@@ -149,8 +150,19 @@ async function run() {
           .status(403)
           .json({ ok: false, message: "You cannot adopt your own pet." });
 
+      const checkExisting = await requestsCollection.findOne({
+        petId: new ObjectId(petId),
+        email,
+      });
+
+      if (checkExisting)
+        return res.status(400).json({
+          ok: false,
+          message: "You have already requested for adoption of this pet.",
+        });
+
       const result = await requestsCollection.insertOne({
-        petId,
+        petId: new ObjectId(petId),
         name,
         email,
         pickupDate,
@@ -169,6 +181,35 @@ async function run() {
           message: "Failed to add adoption request",
         });
       }
+    });
+
+    app.get("/requests", verifyToken, async (req, res) => {
+      const email = req.email;
+
+      const result = await requestsCollection
+        .aggregate([
+          {
+            $match: {
+              email,
+            },
+          },
+          {
+            $lookup: {
+              from: "pets",
+              localField: "petId",
+              foreignField: "_id",
+              as: "pet",
+            },
+          },
+          {
+            $addFields: {
+              pet: { $first: "$pet" },
+            },
+          },
+        ])
+        .toArray();
+
+      return res.json(result);
     });
 
     // await client.db("admin").command({ ping: 1 });
