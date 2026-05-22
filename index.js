@@ -212,6 +212,28 @@ async function run() {
       return res.json(result);
     });
 
+    app.delete("/requests", verifyToken, async (req, res) => {
+      const { email } = req;
+      const { id } = req.body;
+
+      const result = await requestsCollection.deleteOne({
+        _id: new ObjectId(id),
+        email,
+      });
+
+      if (result.deletedCount > 0) {
+        return res.json({
+          ok: true,
+          message: "Adoption request was deleted successfully.",
+        });
+      } else {
+        return res.json({
+          ok: false,
+          message: "Failed to delete the adoption request.",
+        });
+      }
+    });
+
     // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
