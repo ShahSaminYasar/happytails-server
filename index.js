@@ -67,9 +67,21 @@ async function run() {
       const { name, species, ownerEmail, limit } = req.query;
       const query = {};
 
-      if (name) query.name = { $regex: name, $options: "i" };
-      if (species) query.species = { $in: species.split(",") };
-      if (ownerEmail) query.ownerEmail = ownerEmail;
+      if (name) {
+        query.name = { $regex: name, $options: "i" };
+      }
+
+      if (species) {
+        const speciesList = species.split(",");
+
+        query.species = {
+          $in: speciesList.map((s) => new RegExp(`^${s}$`, "i")),
+        };
+      }
+
+      if (ownerEmail) {
+        query.ownerEmail = ownerEmail;
+      }
 
       const pets = await petsCollection
         .find(query)
