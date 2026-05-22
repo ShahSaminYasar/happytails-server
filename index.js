@@ -179,6 +179,11 @@ async function run() {
           .status(403)
           .json({ ok: false, message: "You cannot adopt your own pet." });
 
+      if (targetPet.adopted === true)
+        return res
+          .status(400)
+          .json({ ok: false, message: "This pet has been already adopted." });
+
       const checkExisting = await requestsCollection.findOne({
         petId: new ObjectId(petId),
         email,
@@ -263,6 +268,63 @@ async function run() {
         });
       }
     });
+
+    app.patch("/requests/:id", verifyToken, async (req, res) => {
+      const { id } = req.params;
+      const { status, petId } = req.body;
+
+      const targetPet = await petsCollection.findOne({
+        _id: new ObjectId(petId),
+      });
+
+      if (!targetPet)
+        return res.status(404).json({ ok: false, message: "Pet not found" });
+
+      if (targetPet.ownerEmail !== req.email)
+        return res.json({ ok: false, message: "Unauthorized" });
+
+      if (status === "approved" && targetPet.adopted === true)
+        return res.status(400).json({
+          ok: false,
+          message: "Not available, pet already adopted",
+        });
+
+      const result = await requestsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status,
+          },
+        },
+      );
+
+      if (status === "approved") {
+        const changeStatus = await petsCollection.updateOne(
+          {
+            _id: new ObjectId(petId),
+          },
+          {
+            $set: {
+              adopted: true,
+            },
+          },
+        );
+      }
+
+      if (result.modifiedCount > 0) {
+        return res.json({
+          ok: true,
+          message: "Pet adoption request's status was updated successfully.",
+        });
+      } else {
+        return res.json({
+          ok: false,
+          message: "Failed to update the pet adoption request's status.",
+        });
+      }
+    });
+
+    // app.patch("/requests/:id", verifyToken, async )
 
     // await client.db("admin").command({ ping: 1 });
     console.log(
